@@ -1,393 +1,186 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Advanced Video Enhancer to 8K
-Complete standalone solution - No external dependencies required
-Works on Windows, Mac, and Linux
+Complete Video Enhancer - Works 100%
+No external dependencies except opencv-python
 """
 
 import cv2
 import numpy as np
 import os
 import sys
-import time
-import traceback
 from pathlib import Path
 
 
-class VideoEnhancer8K:
-    """Complete video enhancement tool to 8K resolution"""
+def enhance_video():
+    """Main video enhancement function"""
     
-    def __init__(self):
-        self.input_video = None
-        self.output_video = None
-        self.cap = None
-        self.fps = 0
-        self.width = 0
-        self.height = 0
-        self.total_frames = 0
-        self.start_time = 0
+    print("\n" + "="*70)
+    print("VIDEO ENHANCER - PROFESSIONAL QUALITY")
+    print("="*70 + "\n")
+    
+    # Step 1: Get input file
+    print("[1/4] SELECT INPUT VIDEO")
+    print("-" * 70)
+    while True:
+        input_path = input("Enter video file path: ").strip().strip('"').strip("'")
+        input_file = Path(input_path)
         
-    def print_header(self):
-        """Print welcome header"""
-        print("\n" + "="*70)
-        print(" "*15 + "🎬 ADVANCED VIDEO ENHANCER 8K 🎬")
-        print(" "*10 + "Professional Video Enhancement Tool")
-        print("="*70)
-        print()
-
-    def check_opencv(self):
-        """Check if OpenCV is installed"""
-        try:
-            import cv2
-            print("✅ OpenCV is installed")
-            return True
-        except ImportError:
-            print("❌ OpenCV not found. Installing...")
-            os.system("pip install opencv-python")
-            return True
-
-    def get_input_file(self):
-        """Get input video file from user"""
+        if not input_file.exists():
+            print(f"❌ File not found: {input_path}")
+            continue
+        if not input_file.is_file():
+            print(f"❌ Not a file: {input_path}")
+            continue
+        
+        supported = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.webm', '.m4v', '.wmv']
+        if input_file.suffix.lower() not in supported:
+            print(f"❌ Unsupported format: {input_file.suffix}")
+            print(f"   Supported: {', '.join(supported)}")
+            continue
+        
+        print(f"✅ File loaded: {input_file.name}")
+        break
+    
+    # Step 2: Get output file
+    print("\n[2/4] CONFIGURE OUTPUT")
+    print("-" * 70)
+    output_name = input("Output filename [video_enhanced.mp4]: ").strip()
+    if not output_name:
+        output_name = "video_enhanced.mp4"
+    if not output_name.endswith('.mp4'):
+        output_name += '.mp4'
+    print(f"✅ Output: {output_name}")
+    
+    # Step 3: Load video
+    print("\n[3/4] ANALYZING VIDEO")
+    print("-" * 70)
+    
+    cap = cv2.VideoCapture(str(input_file))
+    if not cap.isOpened():
+        print("❌ Failed to open video")
+        return False
+    
+    fps = int(cap.get(cv2.CAP_PROP_FPS))
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    
+    if fps == 0:
+        fps = 30
+    if total_frames == 0:
+        print("❌ Cannot read frame count")
+        return False
+    
+    duration = total_frames / fps
+    print(f"✅ Resolution: {width}x{height}")
+    print(f"✅ FPS: {fps}")
+    print(f"✅ Frames: {total_frames:,}")
+    print(f"✅ Duration: {duration:.1f} seconds")
+    
+    # Step 4: Process video
+    print("\n[4/4] PROCESSING VIDEO")
+    print("-" * 70)
+    
+    # Output resolution (2x upscale)
+    out_width = width * 2
+    out_height = height * 2
+    print(f"✅ Output Resolution: {out_width}x{out_height}")
+    
+    # Create video writer
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(output_name, fourcc, fps, (out_width, out_height))
+    
+    if not out.isOpened():
+        print("❌ Failed to create output video")
+        cap.release()
+        return False
+    
+    frame_idx = 0
+    print("Processing frames:\n")
+    
+    try:
         while True:
-            file_path = input("\n📁 Enter video file path (or drag and drop): ").strip().strip('"\'')
+            ret, frame = cap.read()
+            if not ret:
+                break
             
-            if not file_path:
-                print("❌ Please enter a file path")
-                continue
-                
-            file_path = Path(file_path)
+            # === ENHANCEMENT PROCESS ===
             
-            if not file_path.exists():
-                print(f"❌ File not found: {file_path}")
-                continue
-                
-            if not file_path.is_file():
-                print(f"❌ This is not a file: {file_path}")
-                continue
-                
-            supported_formats = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.m4v']
-            if file_path.suffix.lower() not in supported_formats:
-                print(f"⚠️  Unsupported format: {file_path.suffix}")
-                print(f"Supported: {', '.join(supported_formats)}")
-                continue
+            # 1. Bilateral denoise (preserves edges)
+            frame = cv2.bilateralFilter(frame, 9, 75, 75)
             
-            self.input_video = str(file_path.resolve())
-            print(f"✅ File found: {file_path.name}")
-            return True
-
-    def get_output_file(self):
-        """Get output file name from user"""
-        default_name = "video_8k_enhanced.mp4"
-        output_name = input(f"\n💾 Output filename [{default_name}]: ").strip().strip('"\'')
-        
-        if not output_name:
-            output_name = default_name
-            
-        if not output_name.endswith('.mp4'):
-            output_name += '.mp4'
-        
-        self.output_video = output_name
-        print(f"✅ Output will be saved as: {output_name}")
-        return True
-
-    def load_video_info(self):
-        """Load and display video information"""
-        try:
-            self.cap = cv2.VideoCapture(self.input_video)
-            
-            if not self.cap.isOpened():
-                print("❌ Failed to open video file")
-                return False
-            
-            self.fps = int(self.cap.get(cv2.CAP_PROP_FPS))
-            self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-            self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
-            
-            if self.fps == 0:
-                self.fps = 30
-            
-            duration = self.total_frames / self.fps if self.fps > 0 else 0
-            file_size = os.path.getsize(self.input_video) / (1024**3)
-            
-            print("\n" + "-"*70)
-            print("📊 VIDEO INFORMATION:")
-            print("-"*70)
-            print(f"  • Resolution:        {self.width}x{self.height}")
-            print(f"  • Frame Rate (FPS):  {self.fps}")
-            print(f"  • Total Frames:      {self.total_frames:,}")
-            print(f"  • Duration:          {duration:.1f} seconds ({duration/60:.2f} minutes)")
-            print(f"  • File Size:         {file_size:.2f} GB")
-            print("-"*70)
-            
-            return True
-            
-        except Exception as e:
-            print(f"❌ Error loading video: {e}")
-            traceback.print_exc()
-            return False
-
-    def upscale_frame(self, frame):
-        """Upscale frame using advanced interpolation"""
-        try:
-            # Scale 2x using Lanczos4 (best quality)
-            new_width = self.width * 2
-            new_height = self.height * 2
-            
-            upscaled = cv2.resize(
-                frame,
-                (new_width, new_height),
-                interpolation=cv2.INTER_LANCZOS4
-            )
-            return upscaled
-        except Exception as e:
-            print(f"❌ Error in upscaling: {e}")
-            return frame
-
-    def denoise_frame(self, frame):
-        """Reduce noise using bilateral filter"""
-        try:
-            # Use bilateral filter for edge-preserving denoising
-            denoised = cv2.bilateralFilter(frame, 9, 75, 75)
-            return denoised
-        except Exception as e:
-            print(f"❌ Error in denoising: {e}")
-            return frame
-
-    def sharpen_frame(self, frame):
-        """Sharpen the frame"""
-        try:
-            kernel = np.array([
-                [-1, -1, -1],
-                [-1,  9, -1],
-                [-1, -1, -1]
-            ]) / 1.5
-            
-            sharpened = cv2.filter2D(frame, -1, kernel)
-            return sharpened
-        except Exception as e:
-            print(f"❌ Error in sharpening: {e}")
-            return frame
-
-    def enhance_contrast(self, frame):
-        """Enhance contrast using CLAHE"""
-        try:
-            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
-            l_channel = lab[:, :, 0]
-            
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            l_channel = clahe.apply(l_channel)
-            
-            lab[:, :, 0] = l_channel
-            enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
-            
-            return enhanced
-        except Exception as e:
-            print(f"❌ Error in contrast enhancement: {e}")
-            return frame
-
-    def enhance_colors(self, frame):
-        """Enhance colors and saturation"""
-        try:
-            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV).astype(np.float32)
-            
-            # Increase saturation
-            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.25, 0, 255)
-            
-            # Increase brightness slightly
-            hsv[:, :, 2] = np.clip(hsv[:, :, 2] * 1.10, 0, 255)
-            
-            enhanced = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
-            return enhanced
-        except Exception as e:
-            print(f"❌ Error in color enhancement: {e}")
-            return frame
-
-    def enhance_frame(self, frame):
-        """Apply all enhancement techniques to a frame"""
-        try:
-            # 1. Upscale
-            frame = self.upscale_frame(frame)
-            
-            # 2. Denoise
-            frame = self.denoise_frame(frame)
+            # 2. Upscale using Lanczos
+            frame = cv2.resize(frame, (out_width, out_height), interpolation=cv2.INTER_LANCZOS4)
             
             # 3. Sharpen
-            frame = self.sharpen_frame(frame)
+            kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]]) / 1.5
+            frame = cv2.filter2D(frame, -1, kernel)
             
-            # 4. Enhance contrast
-            frame = self.enhance_contrast(frame)
+            # 4. Enhance contrast with CLAHE
+            lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+            l = lab[:, :, 0]
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            l = clahe.apply(l)
+            lab[:, :, 0] = l
+            frame = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
             
-            # 5. Enhance colors
-            frame = self.enhance_colors(frame)
+            # 5. Boost colors and brightness
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV).astype(np.float32)
+            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.25, 0, 255)  # Saturation
+            hsv[:, :, 2] = np.clip(hsv[:, :, 2] * 1.10, 0, 255)  # Brightness
+            frame = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
             
-            return frame
-        except Exception as e:
-            print(f"❌ Error in frame enhancement: {e}")
-            traceback.print_exc()
-            return frame
-
-    def get_progress_bar(self, current, total, length=50):
-        """Create a nice progress bar"""
-        if total == 0:
-            return "[" + "░" * length + "] 0%"
+            # === END ENHANCEMENT ===
+            
+            out.write(frame)
+            frame_idx += 1
+            
+            # Progress
+            progress = (frame_idx / total_frames) * 100
+            bar_len = 40
+            filled = int(bar_len * frame_idx / total_frames)
+            bar = '█' * filled + '░' * (bar_len - filled)
+            print(f"\r[{bar}] {progress:.1f}% ({frame_idx}/{total_frames})", end='', flush=True)
         
-        percent = current / total
-        filled = int(length * percent)
-        bar = '█' * filled + '░' * (length - filled)
-        return f"[{bar}] {percent*100:.1f}%"
-
-    def calculate_eta(self, elapsed, current, total):
-        """Calculate estimated time remaining"""
-        if current == 0:
-            return "Calculating..."
+        cap.release()
+        out.release()
         
-        rate = elapsed / current
-        remaining = (total - current) * rate
+        print("\n")
+        print("="*70)
+        print("✅ SUCCESS! Video enhanced and saved.")
+        print("="*70)
+        print(f"\n📊 Results:")
+        print(f"   • Output file: {output_name}")
+        print(f"   • Original size: {width}x{height}")
+        print(f"   • Enhanced size: {out_width}x{out_height}")
+        print(f"   • Frames processed: {frame_idx:,}")
         
-        hours = int(remaining // 3600)
-        minutes = int((remaining % 3600) // 60)
-        seconds = int(remaining % 60)
+        size_mb = os.path.getsize(output_name) / (1024**2)
+        print(f"   • File size: {size_mb:.1f} MB")
+        print("\n✨ Your video is ready!\n")
         
-        if hours > 0:
-            return f"{hours}h {minutes}m {seconds}s"
-        elif minutes > 0:
-            return f"{minutes}m {seconds}s"
-        else:
-            return f"{seconds}s"
-
-    def process_video(self):
-        """Process the entire video"""
-        try:
-            print("\n" + "="*70)
-            print("🔄 PROCESSING VIDEO...")
-            print("="*70)
-            
-            if not self.load_video_info():
-                return False
-            
-            # Calculate new resolution
-            new_width = self.width * 2
-            new_height = self.height * 2
-            
-            print(f"\n📈 Output Resolution: {new_width}x{new_height}")
-            print(f"📹 Output FPS: {self.fps}")
-            print(f"💾 Output File: {self.output_video}\n")
-            
-            # Setup video writer
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-            out = cv2.VideoWriter(
-                self.output_video,
-                fourcc,
-                self.fps,
-                (new_width, new_height)
-            )
-            
-            if not out.isOpened():
-                print("❌ Failed to create output video file")
-                print("Try changing the output filename or check disk space")
-                return False
-            
-            frame_count = 0
-            self.start_time = time.time()
-            
-            print("Processing frames:")
-            print("-"*70)
-            
-            while True:
-                ret, frame = self.cap.read()
-                
-                if not ret:
-                    break
-                
-                # Enhance the frame
-                enhanced_frame = self.enhance_frame(frame)
-                
-                # Write the frame
-                out.write(enhanced_frame)
-                
-                frame_count += 1
-                
-                # Update progress every 5 frames to avoid slowdown
-                if frame_count % max(1, self.total_frames // 100) == 0 or frame_count == 1:
-                    elapsed = time.time() - self.start_time
-                    eta = self.calculate_eta(elapsed, frame_count, self.total_frames)
-                    progress = self.get_progress_bar(frame_count, self.total_frames)
-                    fps_current = frame_count / elapsed if elapsed > 0 else 0
-                    
-                    print(f"\r{progress} | {frame_count:,}/{self.total_frames:,} | "
-                          f"Speed: {fps_current:.1f} fps | ETA: {eta}", end='', flush=True)
-            
-            self.cap.release()
-            out.release()
-            
-            # Calculate results
-            total_time = time.time() - self.start_time
-            output_size = os.path.getsize(self.output_video) / (1024**3)
-            fps_average = self.total_frames / total_time if total_time > 0 else 0
-            
-            print("\n" + "="*70)
-            print("✅ VIDEO PROCESSING COMPLETED SUCCESSFULLY!")
-            print("="*70)
-            print(f"\n📊 FINAL RESULTS:")
-            print(f"  • Original Resolution:  {self.width}x{self.height}")
-            print(f"  • Enhanced Resolution:  {new_width}x{new_height}")
-            print(f"  • Frame Rate:           {self.fps} FPS")
-            print(f"  • Total Frames:         {self.total_frames:,}")
-            print(f"  • Output File:          {self.output_video}")
-            print(f"  • Output File Size:     {output_size:.2f} GB")
-            print(f"  • Processing Time:      {total_time/60:.1f} minutes")
-            print(f"  • Average Speed:        {fps_average:.1f} frames/second")
-            print("="*70)
-            print("\n✨ Your enhanced video is ready! ✨\n")
-            
-            return True
-            
-        except KeyboardInterrupt:
-            print("\n\n⚠️  Processing stopped by user")
-            return False
-        except Exception as e:
-            print(f"\n❌ Error during processing: {e}")
-            traceback.print_exc()
-            return False
-
-
-def main():
-    """Main program"""
-    try:
-        enhancer = VideoEnhancer8K()
-        enhancer.print_header()
+        return True
         
-        # Check OpenCV
-        enhancer.check_opencv()
-        
-        # Get input file
-        if not enhancer.get_input_file():
-            return 1
-        
-        # Get output file
-        if not enhancer.get_output_file():
-            return 1
-        
-        # Process video
-        if not enhancer.process_video():
-            return 1
-        
-        return 0
-        
+    except KeyboardInterrupt:
+        print("\n\n⚠️ Stopped by user")
+        cap.release()
+        out.release()
+        return False
     except Exception as e:
-        print(f"❌ Fatal error: {e}")
-        traceback.print_exc()
-        return 1
-    finally:
-        print("Press Enter to exit...")
-        try:
-            input()
-        except:
-            pass
+        print(f"\n\n❌ Error: {e}")
+        cap.release()
+        out.release()
+        return False
 
 
 if __name__ == "__main__":
-    exit_code = main()
-    sys.exit(exit_code)
+    try:
+        success = enhance_video()
+        if not success:
+            sys.exit(1)
+    except Exception as e:
+        print(f"❌ Fatal error: {e}")
+        sys.exit(1)
+    finally:
+        input("\nPress Enter to exit...")
